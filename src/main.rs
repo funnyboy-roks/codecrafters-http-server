@@ -1,4 +1,4 @@
-use std::{collections::HashMap, path::PathBuf, sync::Arc};
+use std::{collections::HashMap, sync::Arc};
 
 use tokio::{
     fs,
@@ -19,6 +19,15 @@ async fn handle_stream(mut stream: TcpStream, cli: &Cli) -> anyhow::Result<()> {
     eprintln!("accepted new connection");
     dbg!(&req);
     match (&*req.method, &*req.path) {
+        ("POST", s) if s.starts_with("/files/") => {
+            let file = s.strip_prefix("/files/").unwrap();
+
+            let mut pb = cli.directory.clone();
+            pb.push(file);
+
+            fs::write(pb, req.body).await?;
+            stream.write_all(b"HTTP/1.1 201 OK\r\n\r\n").await?;
+        }
         ("GET", s) if s.starts_with("/files/") => {
             let file = s.strip_prefix("/files/").unwrap();
 

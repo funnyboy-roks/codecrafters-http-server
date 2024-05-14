@@ -44,7 +44,7 @@ impl Request {
         r.read_exact(&mut buf).await?;
         assert_eq!(buf[0], b'\n');
 
-        let mut headers = HashMap::new();
+        let mut headers: HashMap<String, String> = HashMap::new();
 
         loop {
             let s = Self::read_until(r, b'\n').await?;
@@ -61,17 +61,15 @@ impl Request {
             headers.insert(k.into(), v.into());
         }
 
-        let body = Vec::new();
-        // let mut buf = [0u8; 256];
-        // loop {
-        //     let len = r.read(&mut buf)?;
+        let body = if let Some(len) = headers.get("Content-Length") {
+            let len: usize = len.parse()?;
+            let mut body = vec![0u8; len];
+            r.read_exact(&mut body).await?;
 
-        //     body.extend_from_slice(&buf[..len]);
-
-        //     if len < buf.len() {
-        //         break;
-        //     }
-        // }
+            body
+        } else {
+            Vec::new()
+        };
 
         dbg!(&body);
 
