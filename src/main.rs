@@ -26,7 +26,7 @@ async fn handle_stream(mut stream: TcpStream, cli: &Cli) -> anyhow::Result<()> {
             pb.push(file);
 
             fs::write(pb, req.body).await?;
-            stream.write_all(b"HTTP/1.1 201 OK\r\n\r\n").await?;
+            stream.write_all(b"HTTP/1.1 201 Created\r\n\r\n").await?;
         }
         ("GET", s) if s.starts_with("/files/") => {
             let file = s.strip_prefix("/files/").unwrap();
