@@ -1,107 +1,50 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, path::PathBuf, sync::Arc};
 
 use tokio::{
-    io::{AsyncRead, AsyncReadExt, AsyncWriteExt},
+    fs,
+    io::AsyncWriteExt,
     net::{TcpListener, TcpStream},
 };
 
-#[derive(Debug, Clone, Eq, PartialEq)]
-struct Request {
-    method: String,
-    path: String,
-    headers: HashMap<String, String>,
-    body: Vec<u8>,
-}
+mod cli;
+mod request;
+mod response;
 
-impl Request {
-    pub async fn read_until<R>(r: &mut R, delim: u8) -> anyhow::Result<String>
-    where
-        R: AsyncRead + Unpin,
-    {
-        let mut out = String::with_capacity(5);
-        let mut buf = [0u8; 1];
-        loop {
-            let l = r.read_exact(&mut buf).await?;
-            assert_eq!(l, 1);
-            let byte = buf[0];
+use cli::Cli;
+use request::Request;
+use response::Response;
 
-            if byte == delim {
-                break;
-            }
-
-            out.push(byte as char);
-        }
-
-        Ok(out)
-    }
-
-    pub async fn parse<R>(r: &mut R) -> anyhow::Result<Request>
-    where
-        R: AsyncRead + std::marker::Unpin,
-    {
-        let method = Self::read_until(r, b' ').await?;
-        let path = Self::read_until(r, b' ').await?;
-
-        Self::read_until(r, b'\r').await?;
-        let mut buf = [0u8; 1];
-        r.read_exact(&mut buf).await?;
-        assert_eq!(buf[0], b'\n');
-
-        let mut headers = HashMap::new();
-
-        loop {
-            let s = Self::read_until(r, b'\n').await?;
-            let s = s.strip_suffix('\r').unwrap();
-
-            if s == "" {
-                break;
-            }
-
-            let (k, v) = s.split_once(':').unwrap();
-
-            let v = v.strip_prefix(' ').unwrap_or(v);
-
-            headers.insert(k.into(), v.into());
-        }
-
-        let body = Vec::new();
-        // let mut buf = [0u8; 256];
-        // loop {
-        //     let len = r.read(&mut buf)?;
-
-        //     body.extend_from_slice(&buf[..len]);
-
-        //     if len < buf.len() {
-        //         break;
-        //     }
-        // }
-
-        dbg!(&body);
-
-        Ok(Request {
-            method,
-            path,
-            headers,
-            body,
-        })
-    }
-}
-
-async fn handle_stream(mut stream: TcpStream) -> anyhow::Result<()> {
+async fn handle_stream(mut stream: TcpStream, cli: &Cli) -> anyhow::Result<()> {
     let req = Request::parse(&mut stream).await?;
     eprintln!("accepted new connection");
     dbg!(&req);
     match (&*req.method, &*req.path) {
+        ("GET", s) if s.starts_with("/files/") => {
+            let file = s.strip_prefix("/files/").unwrap();
+
+            let mut pb = cli.directory.clone();
+            pb.push(file);
+
+            let res = Response::new(
+                HashMap::from([("Content-Type".into(), "application/octet-stream".into())]),
+                fs::read(pb).await.unwrap(),
+            );
+            dbg!(&res);
+            let bytes = res.into_bytes();
+            eprintln!("{}", String::from_utf8_lossy(&bytes));
+            stream.write_all(&bytes).await?;
+        }
         ("GET", "/user-agent") => {
             let ua = req.headers.get("User-Agent").unwrap();
-            stream.write_all(
-                    format!(
-                        "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {}\r\n\r\n{}",
-                        ua.len(),
-                        ua
-                    )
-                    .as_bytes(),
-                ).await?;
+
+            let res = Response::new(
+                HashMap::from([("Content-Type".into(), "text/plain".into())]),
+                ua.as_bytes().to_vec(),
+            );
+            dbg!(&res);
+            let bytes = res.into_bytes();
+            eprintln!("{}", String::from_utf8_lossy(&bytes));
+            stream.write_all(&bytes).await?;
         }
         ("GET", s) if s.starts_with("/echo/") => {
             stream.write_all(
@@ -128,12 +71,14 @@ async fn handle_stream(mut stream: TcpStream) -> anyhow::Result<()> {
 async fn main() -> anyhow::Result<()> {
     let listener = TcpListener::bind("127.0.0.1:4221").await.unwrap();
 
-    // let mut buf = [0u8; 256];
+    let cli = Arc::new(Cli::parse());
+
     loop {
         let (stream, _) = listener.accept().await?;
 
+        let cli = cli.clone();
         tokio::spawn(async move {
-            match handle_stream(stream).await {
+            match handle_stream(stream, &cli).await {
                 Ok(_) => {}
                 Err(e) => eprintln!("error: {:?}", e),
             }
