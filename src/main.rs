@@ -58,18 +58,21 @@ async fn handle_stream(mut stream: TcpStream, cli: &Cli) -> anyhow::Result<()> {
         }
         ("GET", s) if s.starts_with("/echo/") => {
             let res = if let Some(encoding) = req.headers.get("accept-encoding") {
-                match &**encoding {
-                    "gzip" => Response::new(
+                let encodings: Vec<_> = encoding.split(",").map(|s| s.trim().to_string()).collect();
+
+                if encodings.contains(&"gzip".to_string()) {
+                    Response::new(
                         HashMap::from([
                             ("Content-Type".into(), "text/plain".into()),
-                            ("Content-Encoding".into(), encoding.into()),
+                            ("Content-Encoding".into(), "gzip".into()),
                         ]),
                         s.strip_prefix("/echo/").unwrap().into(),
-                    ),
-                    _ => Response::new(
+                    )
+                } else {
+                    Response::new(
                         HashMap::from([("Content-Type".into(), "text/plain".into())]),
                         s.strip_prefix("/echo/").unwrap().into(),
-                    ),
+                    )
                 }
             } else {
                 Response::new(
