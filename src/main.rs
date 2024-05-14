@@ -1,12 +1,9 @@
 use std::collections::HashMap;
 
-use anyhow::Context;
 use tokio::{
     io::{AsyncRead, AsyncReadExt, AsyncWriteExt},
     net::{TcpListener, TcpStream},
 };
-
-const CRLF: &str = "\r\n";
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 struct Request {
@@ -117,12 +114,10 @@ async fn handle_stream(mut stream: TcpStream) -> anyhow::Result<()> {
                 ).await?;
         }
         ("GET", "/") => {
-            stream.write_all(b"HTTP/1.1 200 OK{CRLF}{CRLF}").await?;
+            stream.write_all(b"HTTP/1.1 200 OK\r\n\r\n").await?;
         }
         _ => {
-            stream
-                .write_all(b"HTTP/1.1 404 Not Found{CRLF}{CRLF}")
-                .await?;
+            stream.write_all(b"HTTP/1.1 404 Not Found\r\n\r\n").await?;
         }
     }
 
