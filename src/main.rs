@@ -105,6 +105,15 @@ fn main() -> anyhow::Result<()> {
         eprintln!("accepted new connection");
         dbg!(&req);
         match (&*req.method, &*req.path) {
+            ("GET", "/user-agent") => {
+                let ua = req.headers.get("User-Agent").unwrap();
+                write!(
+                    stream,
+                    "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {}\r\n\r\n{}",
+                    ua.len(),
+                    ua
+                )?;
+            }
             ("GET", s) if s.starts_with("/echo/") => {
                 write!(
                     stream,
