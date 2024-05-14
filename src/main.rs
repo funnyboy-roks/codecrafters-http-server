@@ -1,5 +1,6 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, io::Write, sync::Arc};
 
+use flate2::{write::GzEncoder, Compression};
 use tokio::{
     fs,
     io::AsyncWriteExt,
@@ -61,12 +62,16 @@ async fn handle_stream(mut stream: TcpStream, cli: &Cli) -> anyhow::Result<()> {
                 let encodings: Vec<_> = encoding.split(",").map(|s| s.trim().to_string()).collect();
 
                 if encodings.contains(&"gzip".to_string()) {
+                    let body = s.strip_prefix("/echo/").unwrap().as_bytes();
+                    let mut compbody = Vec::new();
+                    GzEncoder::new(&mut compbody, Compression::default()).write_all(body)?;
+
                     Response::new(
                         HashMap::from([
                             ("Content-Type".into(), "text/plain".into()),
                             ("Content-Encoding".into(), "gzip".into()),
                         ]),
-                        s.strip_prefix("/echo/").unwrap().into(),
+                        compbody,
                     )
                 } else {
                     Response::new(
