@@ -25,14 +25,15 @@ async fn handle_stream(mut stream: TcpStream, cli: &Cli) -> anyhow::Result<()> {
             let mut pb = cli.directory.clone();
             pb.push(file);
 
-            let res = Response::new(
-                HashMap::from([("Content-Type".into(), "application/octet-stream".into())]),
-                fs::read(pb).await.unwrap(),
-            );
-            dbg!(&res);
-            let bytes = res.into_bytes();
-            eprintln!("{}", String::from_utf8_lossy(&bytes));
-            stream.write_all(&bytes).await?;
+            if pb.exists() {
+                let res = Response::new(
+                    HashMap::from([("Content-Type".into(), "application/octet-stream".into())]),
+                    fs::read(pb).await.unwrap(),
+                );
+                stream.write_all(&res.into_bytes()).await?;
+            } else {
+                stream.write_all(b"HTTP/1.1 404 Not Found\r\n\r\n").await?;
+            }
         }
         ("GET", "/user-agent") => {
             let ua = req.headers.get("User-Agent").unwrap();
