@@ -58,10 +58,10 @@ impl Request {
 
             let v = v.strip_prefix(' ').unwrap_or(v);
 
-            headers.insert(k.into(), v.into());
+            headers.insert(k.to_lowercase().into(), v.into());
         }
 
-        let body = if let Some(len) = headers.get("Content-Length") {
+        let body = if let Some(len) = headers.get("content-length") {
             let len: usize = len.parse()?;
             let mut body = vec![0u8; len];
             r.read_exact(&mut body).await?;

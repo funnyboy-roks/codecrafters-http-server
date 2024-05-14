@@ -45,7 +45,7 @@ async fn handle_stream(mut stream: TcpStream, cli: &Cli) -> anyhow::Result<()> {
             }
         }
         ("GET", "/user-agent") => {
-            let ua = req.headers.get("User-Agent").unwrap();
+            let ua = req.headers.get("user-agent").unwrap();
 
             let res = Response::new(
                 HashMap::from([("Content-Type".into(), "text/plain".into())]),
@@ -57,14 +57,27 @@ async fn handle_stream(mut stream: TcpStream, cli: &Cli) -> anyhow::Result<()> {
             stream.write_all(&bytes).await?;
         }
         ("GET", s) if s.starts_with("/echo/") => {
-            stream.write_all(
-                    format!(
-                        "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {}\r\n\r\n{}",
-                        s.len() - 6,
-                        s.strip_prefix("/echo/").unwrap()
-                    )
-                    .as_bytes(),
-                ).await?;
+            let res = if let Some(encoding) = req.headers.get("accept-encoding") {
+                match &**encoding {
+                    "gzip" => Response::new(
+                        HashMap::from([
+                            ("Content-Type".into(), "text/plain".into()),
+                            ("Content-Encoding".into(), encoding.into()),
+                        ]),
+                        s.strip_prefix("/echo/").unwrap().into(),
+                    ),
+                    _ => Response::new(
+                        HashMap::from([("Content-Type".into(), "text/plain".into())]),
+                        s.strip_prefix("/echo/").unwrap().into(),
+                    ),
+                }
+            } else {
+                Response::new(
+                    HashMap::from([("Content-Type".into(), "text/plain".into())]),
+                    s.strip_prefix("/echo/").unwrap().into(),
+                )
+            };
+            stream.write_all(&res.into_bytes()).await?;
         }
         ("GET", "/") => {
             stream.write_all(b"HTTP/1.1 200 OK\r\n\r\n").await?;
