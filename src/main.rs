@@ -108,7 +108,8 @@ fn main() -> anyhow::Result<()> {
             ("GET", s) if s.starts_with("/echo/") => {
                 write!(
                     stream,
-                    "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 3\r\n\r\n{}",
+                    "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {}\r\n\r\n{}",
+                    s.len() - 6,
                     s.strip_prefix("/echo/").unwrap()
                 )?;
             }
